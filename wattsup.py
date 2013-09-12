@@ -35,7 +35,8 @@ FULLHANDLING = 2
 
 
 commands = {'header_request': '#H,R,0;',
-            'logging':        '#L,W,3,E,,{};'}
+            'logging':        '#L,W,3,E,,{};',
+            'reset':          '#V,W,0;'}
 
 verbose = False
 
@@ -69,24 +70,56 @@ class wattsup (object):
         """ Return an array of strings that identify the data columns. """
         if verbose:
             print('Retrieving header information')
-        self.s.write(commands['header_request'])
-        h = self.s.readline()
+
+        # Loop until the header info comes back
+        while True:
+            self.s.write(commands['header_request'])
+            h = self.s.readline()
+            if h[0:2] == "#h":
+                break
+
         hf = h.split(';')[0].split(',')
         return hf[3:]
 
-    def logg (self, outfile=None, interval=1):
+    def logg (self, outfile=None, interval=1, format='raw'):
         """ Log data from the watts up """
         if outfile:
             f = open(outfile, 'w')
         else:
             f = stdoutfile()
 
-        print(interval)
         self.s.write(commands['logging'].format(int(interval)))
 
-        while True:
-            l = self.s.readline()
-            print(l)
+        try:
+            while True:
+                l = self.s.readline()
+                if l[0:2] == '#d':
+                    vals = l.split(';')[0].split(',')[3:]
+
+                    if format == 'raw':
+                        f.write(','.join(vals) + '\n')
+
+                    else:
+                        m = [('watts', float(vals[0])/10.0),
+                             ('volts', float(vals[1])/10.0)]
+
+                        if format == 'pretty':
+                            for i,item in zip(range(len(m)), m):
+                                print('{} {}'.format(item[1], item[0]), end='')
+                                if i == len(m) - 1:
+                                    print()
+                                else:
+                                    print(', ', end='')
+
+        except KeyboardInterrupt:
+            self.s.close()
+
+    def reset (self):
+        """ Soft reset the watts up """
+        if verbose:
+            print("Resetting the Watts Up")
+
+        self.s.write(commands['reset'])
 
 
     def mode(self, runmode):
@@ -214,11 +247,14 @@ memory. network: post samples to a server.')
                         help='How to display the data in log format. raw: \
 comma separated values directly from watts up. pretty: easy to read by humans. \
 json: JSON dict.')
-    parser.add_argument('-o', '--outfile',
+    parser.add_argument('--outfile',
                         dest='outfile',
-                        default='wattsup_{}.data'.format(
-                        datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')),
+                        action='store',
                         help='File to write samples to in log mode.')
+    parser.add_argument('--save',
+                        dest='save',
+                        action='store_true',
+                        help='Like --outfile, but the filename is set for you.')
     parser.add_argument('-s', '--sample-interval',
                         dest='interval',
                         default=1.0,
@@ -236,7 +272,6 @@ json: JSON dict.')
     # Connect to the meter
     meter = wattsup(args.port)
 
-
     # Do the commands in the correct order
 
     if args.header:
@@ -245,9 +280,18 @@ json: JSON dict.')
         print('Headings: ' + ', '.join(h))
         sys.exit(0)
 
+    if args.outfile:
+        outfile = args.outfile
+    elif args.save:
+        outfile = 'wattsup_{}.data'.format(
+            datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
+    else:
+        # stdout
+        outfile = None
+
     if args.command == 'log':
         # Tell the meter to send us samples
-        meter.logg(outfile=args.outfile, interval=args.interval)
+        meter.logg(outfile=outfile, interval=args.interval, format=args.format)
 
 
 
