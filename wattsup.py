@@ -211,14 +211,10 @@ class wattsup (object):
 
         cmd = commands['set_network_ext'].format(url, port, pfile,
             USER_AGENT, int(interval))
-        print(cmd)
         self.s.write(cmd)
-
-        print(self.s.readline())
-        print(self.s.readline())
-        print(self.s.readline())
-
+        self.s.readline()
         self.s.write(commands['write_network'])
+        self.s.readline()
 
     def reset (self):
         """ Soft reset the watts up """
