@@ -23,6 +23,7 @@ from __future__ import print_function
 import os, serial
 import datetime, time
 import argparse
+import json
 import curses
 import sys
 
@@ -35,6 +36,7 @@ FULLHANDLING = 2
 
 
 commands = {'header_request': '#H,R,0;',
+            'version_request': '#V,R,0;',
             'logging':        '#L,W,3,E,,{};',
             'reset':          '#V,W,0;'}
 
@@ -58,13 +60,6 @@ class wattsup (object):
             raise Exception('Unable to find {}'.format(port))
 
         self.s = serial.Serial(port, 115200)
-        self.logfile = None
-        self.interval = 1
-        # initialize lists for keeping data
-        self.t = []
-        self.power = []
-        self.potential = []
-        self.current = []
 
     def getHeader (self):
         """ Return an array of strings that identify the data columns. """
@@ -81,10 +76,44 @@ class wattsup (object):
         hf = h.split(';')[0].split(',')
         return hf[3:]
 
+    def getInfo (self):
+        """ Returns a string that nicely formats the meter's version and info"""
+        if verbose:
+            print('Retrieving identifying information')
+
+        # Loop until the header info comes back
+        while True:
+            self.s.write(commands['version_request'])
+            i = self.s.readline()
+            if i[0:2] == "#v":
+                ifields = i.split(';')[0].split(',')[3:]
+                if len(ifields) == 8:
+                    break
+        ret = ''
+        versions = ['Standard', 'PRO', 'ES', '.NET']
+        hwma = ['ADE7763, PIC18F45J10', 'ADE7763, PIC18F45J10, Ethernet']
+        hwmi = ['no USB', 'USB @ 19200bps', 'USB @ 115200bps', 'Ethernet']
+        comptime = datetime.datetime.strptime(ifields[6], '%Y%m%d%H%M%S')
+        ret += 'Watts Up? Meter Version Information:\n'
+        ret += 'Model type:     {}\n'.format(versions[int(ifields[0])])
+        ret += 'Memory (bytes): {}\n'.format(ifields[1])
+        ret += 'Hardware Major: {}\n'.format(hwma[int(ifields[2])-5])
+        ret += 'Hardware Minor: {}\n'.format(hwmi[int(ifields[3])])
+        ret += 'Firmware Major: {}\n'.format(ifields[4])
+        ret += 'Firmware Minor: {}\n'.format(ifields[5])
+        ret += 'SW Compilation: {}\n'.format(comptime)
+        return ret
+
     def logg (self, outfile=None, interval=1, format='raw'):
         """ Log data from the watts up """
         if outfile:
             f = open(outfile, 'w')
+
+            f.write('# Readings from a Watts Up? Meter\n')
+            f.write('# {}\n\n'.format(datetime.datetime.now()))
+
+            if format == 'raw':
+                f.write('timestamp,{}\n'.format(','.join(self.getHeader())))
         else:
             f = stdoutfile()
 
@@ -96,20 +125,40 @@ class wattsup (object):
                 if l[0:2] == '#d':
                     vals = l.split(';')[0].split(',')[3:]
 
+                    now = int(time.time()*1000)
+
+                    m = [('time', now),
+                         ('watts', float(vals[0])/10.0),
+                         ('volts', float(vals[1])/10.0),
+                         ('amps', float(vals[2])/10.0),
+                         ('watt-hours', float(vals[3])/10.0),
+                         ('dollars', float(vals[4])/1000.0),
+                         ('watt hours monthly', float(vals[5])),
+                         ('dollars monthly', float(vals[6])*10.0),
+                         ('power factor', float(vals[7])),
+                         ('duty cycle', float(vals[8])),
+                         ('power cycle', float(vals[9])),
+                         ('frequency', float(vals[10])/10.0),
+                         ('volt-amps', float(vals[10])/10.0)]
+
                     if format == 'raw':
-                        f.write(','.join(vals) + '\n')
+                        for i,item in zip(range(len(m)), m):
+                            f.write('{}'.format(item[1]))
+                            if i == len(m) - 1:
+                                f.write('\n')
+                            else:
+                                f.write(',')
 
-                    else:
-                        m = [('watts', float(vals[0])/10.0),
-                             ('volts', float(vals[1])/10.0)]
+                    elif format == 'pretty':
+                        for i,item in zip(range(len(m)), m):
+                            f.write('{} {}'.format(item[1], item[0]))
+                            if i == len(m) - 1:
+                                f.write('\n')
+                            else:
+                                f.write(', ')
 
-                        if format == 'pretty':
-                            for i,item in zip(range(len(m)), m):
-                                print('{} {}'.format(item[1], item[0]), end='')
-                                if i == len(m) - 1:
-                                    print()
-                                else:
-                                    print(', ', end='')
+                    elif format == 'json':
+                        f.write('{}\n'.format(json.dumps(dict(m))))
 
         except KeyboardInterrupt:
             self.s.close()
@@ -120,6 +169,7 @@ class wattsup (object):
             print("Resetting the Watts Up")
 
         self.s.write(commands['reset'])
+
 
 
     def mode(self, runmode):
@@ -260,6 +310,10 @@ json: JSON dict.')
                         default=1.0,
                         type=int,
                         help='Sample interval (default 1 s)')
+    parser.add_argument('-i', '--info',
+                        dest='info',
+                        action='store_true',
+                        help='Request identifying information from the meter.')
     parser.add_argument('-p', '--port',
                         dest='port',
                         required=True,
@@ -278,6 +332,11 @@ json: JSON dict.')
         # Get the header info for the data
         h = meter.getHeader()
         print('Headings: ' + ', '.join(h))
+        sys.exit(0)
+
+    if args.info:
+        i = meter.getInfo()
+        print(i)
         sys.exit(0)
 
     if args.outfile:
