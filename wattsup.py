@@ -25,20 +25,22 @@ import datetime, time
 import argparse
 import json
 import curses
+import string
 import sys
 
 
 
-EXTERNAL_MODE = 'E'
-INTERNAL_MODE = 'I'
-TCPIP_MODE = 'T'
-FULLHANDLING = 2
+USER_AGENT = 'WattsUp.NET'
 
 
-commands = {'header_request': '#H,R,0;',
-            'version_request': '#V,R,0;',
-            'logging':        '#L,W,3,E,,{};',
-            'reset':          '#V,W,0;'}
+commands = {'header_request':   '#H,R,0;',
+            'version_request':  '#V,R,0;',
+            'network_info':     '#I,Q,0;',
+            'network_info_ext': '#I,E,0;',
+            'set_network_ext':  '#I,X,5,{},{},{},{},{};',
+            'write_network':    '#I,W,0;',
+            'logging':          '#L,W,3,E,,{};',
+            'reset':            '#V,W,0;'}
 
 verbose = False
 
@@ -76,12 +78,11 @@ class wattsup (object):
         hf = h.split(';')[0].split(',')
         return hf[3:]
 
-    def getInfo (self):
+    def getVersionInfo (self):
         """ Returns a string that nicely formats the meter's version and info"""
         if verbose:
             print('Retrieving identifying information')
 
-        # Loop until the header info comes back
         while True:
             self.s.write(commands['version_request'])
             i = self.s.readline()
@@ -104,7 +105,44 @@ class wattsup (object):
         ret += 'SW Compilation: {}\n'.format(comptime)
         return ret
 
-    def logg (self, outfile=None, interval=1, format='raw'):
+    def getNetworkInfo (self):
+        if verbose:
+            print('Retrieving network information')
+
+        while True:
+            self.s.write(commands['network_info'])
+            i = self.s.readline()
+            if i[0:2] == "#i":
+                n1 = i.split(';')[0].split(',')[3:]
+                if len(n1) == 7:
+                    break
+
+        while True:
+            self.s.write(commands['network_info_ext'])
+            i = self.s.readline()
+            if i[0:2] == "#i":
+                n2 = i.split(';')[0].split(',')[3:]
+                if len(n2) == 5:
+                    break
+
+        mac = ':'.join(s.encode('hex') for s in n1[6].decode('hex'))
+        ret = ''
+        ret += 'Watts Up? Meter Network Information:\n'
+        ret += 'IP Address:    {}\n'.format(n1[0])
+        ret += 'Gateway:       {}\n'.format(n1[1])
+        ret += 'DNS 1:         {}\n'.format(n1[2])
+        ret += 'DNS 2:         {}\n'.format(n1[3])
+        ret += 'Net Mask:      {}\n'.format(n1[4])
+        ret += 'DHCP:          {}\n'.format(bool(n1[5]))
+        ret += 'MAC Address:   {}\n'.format(mac)
+        ret += 'POST Host:     {}\n'.format(n2[0])
+        ret += 'POST Port:     {}\n'.format(n2[1])
+        ret += 'POST File:     {}\n'.format(n2[2])
+        ret += 'User Agent:    {}\n'.format(n2[3])
+        ret += 'POST Interval: {} seconds\n'.format(n2[4])
+        return ret
+
+    def log (self, outfile=None, interval=1, format='raw'):
         """ Log data from the watts up """
         if outfile:
             f = open(outfile, 'w')
@@ -163,6 +201,25 @@ class wattsup (object):
         except KeyboardInterrupt:
             self.s.close()
 
+    def setNetworkExtended (self, url, port, pfile, interval=1):
+        if len(url) > 40:
+            print("POST URL too long. Must be 40 characters or less.")
+            sys.exit(1)
+        if len(pfile) > 40:
+            print("POST file too long. Must be 40 characters or less.")
+            sys.exit(1)
+
+        cmd = commands['set_network_ext'].format(url, port, pfile,
+            USER_AGENT, int(interval))
+        print(cmd)
+        self.s.write(cmd)
+
+        print(self.s.readline())
+        print(self.s.readline())
+        print(self.s.readline())
+
+        self.s.write(commands['write_network'])
+
     def reset (self):
         """ Soft reset the watts up """
         if verbose:
@@ -189,86 +246,6 @@ class wattsup (object):
                 V = float(fields[4]) / 10;
                 A = float(fields[5]) / 1000;
 
-    def log(self, logfile = None):
-        if not args.sim:
-            self.mode(EXTERNAL_MODE)
-        if logfile:
-            self.logfile = logfile
-            o = open(self.logfile,'w')
-        if args.raw:
-            rawfile = '.'.join([os.path.splitext(self.logfile)[0],'raw'])
-            try:
-                r = open(rawfile,'w')
-            except:
-                args.raw = False
-        line = self.s.readline()
-        n = 0
-        # set up curses
-        screen = curses.initscr()
-        curses.noecho()
-        curses.cbreak()
-        screen.nodelay(1)
-        try:
-            curses.curs_set(0)
-        except:
-            pass
-        if args.plot:
-            fig = plt.figure()
-        while True:
-            if args.sim:
-                time.sleep(self.interval)
-            if line.startswith( '#d' ):
-                if args.raw:
-                    r.write(line)
-                fields = line.split(',')
-                if len(fields)>5:
-                    W = float(fields[3]) / 10;
-                    V = float(fields[4]) / 10;
-                    A = float(fields[5]) / 1000;
-                    screen.clear()
-                    screen.addstr(2, 4, 'Logging to file %s' % self.logfile)
-                    screen.addstr(4, 4, 'Time:     %d s' % n)
-                    screen.addstr(5, 4, 'Power:   %3.1f W' % W)
-                    screen.addstr(6, 4, 'Voltage: %5.1f V' % V)
-                    if A<1000:
-                        screen.addstr(7, 4, 'Current: %d mA' % int(A*1000))
-                    else:
-                        screen.addstr(7, 4, 'Current: %3.3f A' % A)
-                    screen.addstr(9, 4, 'Press "q" to quit ')
-                    #if args.debug:
-                    #    screen.addstr(12, 0, line)
-                    screen.refresh()
-                    c = screen.getch()
-                    if c in (ord('q'), ord('Q')):
-                        break  # Exit the while()
-                    if args.plot:
-                        self.t.append(float(n))
-                        self.power.append(W)
-                        self.potential.append(V)
-                        self.current.append(A)
-                        fig.clear()
-                        plt.plot(np.array(self.t)/60,np.array(self.power),'r')
-                        ax = plt.gca()
-                        ax.set_xlabel('Time (minutes)')
-                        ax.set_ylabel('Power (W)')
-                        # show the plot
-                        fig.canvas.draw()
-                    if self.logfile:
-                        o.write('%s %d %3.1f %3.1f %5.3f\n' % (datetime.datetime.now(), n, W, V, A))
-                    n += self.interval
-            line = self.s.readline()
-        curses.nocbreak()
-        curses.echo()
-        curses.endwin()
-        try:
-            o.close()
-        except:
-            pass
-        if args.raw:
-            try:
-                r.close()
-            except:
-                pass
 
 
 
@@ -283,13 +260,10 @@ if __name__ == '__main__':
                         dest='header',
                         action='store_true',
                         help='Print the data header info and exit.')
-    parser.add_argument('-c', '--command',
-                        dest='command',
-                        choices=['log', 'internal', 'network'],
-                        default='log',
-                        help='The command to send to the Watts Up?.\
-log: record samples to stdout or a file. internal: record samples to internal \
-memory. network: post samples to a server.')
+    parser.add_argument('-l', '--log',
+                        dest='log',
+                        action='store_true',
+                        help='Tell the meter to send us samples via USB.')
     parser.add_argument('-f', '--format',
                         dest='format',
                         choices=['raw', 'pretty', 'json'],
@@ -310,6 +284,16 @@ json: JSON dict.')
                         default=1.0,
                         type=int,
                         help='Sample interval (default 1 s)')
+    parser.add_argument('-n', '--network-config',
+                        dest='network',
+                        action='append',
+                        nargs=3,
+                        help='Configure POST settings. <POST URL> <POST port> \
+<POST file>')
+    parser.add_argument('--reset',
+                        dest='reset',
+                        action='store_true',
+                        help='Soft reset the meter.')
     parser.add_argument('-i', '--info',
                         dest='info',
                         action='store_true',
@@ -330,27 +314,42 @@ json: JSON dict.')
 
     if args.header:
         # Get the header info for the data
-        h = meter.getHeader()
-        print('Headings: ' + ', '.join(h))
+        print('Headings: {}'.format(', '.join(meter.getHeader())))
         sys.exit(0)
 
     if args.info:
-        i = meter.getInfo()
-        print(i)
+        print(meter.getVersionInfo())
+        print(meter.getNetworkInfo())
         sys.exit(0)
 
-    if args.outfile:
-        outfile = args.outfile
-    elif args.save:
-        outfile = 'wattsup_{}.data'.format(
-            datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
-    else:
-        # stdout
-        outfile = None
+    if args.reset:
+        meter.reset()
+        sys.exit(0)
 
-    if args.command == 'log':
+    if args.log:
+        if args.outfile:
+            outfile = args.outfile
+        elif args.save:
+            outfile = 'wattsup_{}.data'.format(
+                datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
+        else:
+            # stdout
+            outfile = None
+
         # Tell the meter to send us samples
-        meter.logg(outfile=outfile, interval=args.interval, format=args.format)
+        meter.log(outfile=outfile, interval=args.interval, format=args.format)
+
+    elif args.network:
+        url = args.network[0][0]
+        port = args.network[0][1]
+        pfile = args.network[0][2]
+
+        interval = 1
+        if args.interval:
+            interval = int(args.interval)
+
+        meter.setNetworkExtended(url, port, pfile, interval)
+
 
 
 
