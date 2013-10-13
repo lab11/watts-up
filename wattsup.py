@@ -1,37 +1,23 @@
 #!/usr/bin/env python
-"""record data from WattsUp power meter
-
-Reads data from a Watts Up PRO or compatible power meter (http://www.wattsupmeters.com).
-Plots in real time, can run in simulation mode, reading from a file rather than
-a physical power meter.
-
-Output format will be space sperated containing:
-YYYY-MM-DD HH:MM:SS.ssssss n W V A
-where n is sample number, W is power in watts, V volts, A current in amps
-
-Usage: "wattsup.py -h" for options
-
-Author: Kelsey Jordahl
-Copyright: Kelsey Jordahl 2011
-License: GPLv3
-Time-stamp: <Tue Sep 20 09:14:29 EDT 2011>
-
-"""
 
 from __future__ import print_function
 
-import os, serial
+import sys
+try:
+    import serial
+except ImportError:
+    print('Need serial package.')
+    print('sudo port install py-serial')
+    sys.exit(1)
+import os
 import datetime, time
 import argparse
 import json
 import curses
 import string
-import sys
-
 
 
 USER_AGENT = 'WattsUp.NET'
-
 
 commands = {'header_request':   '#H,R,0;',
             'version_request':  '#V,R,0;',
@@ -225,26 +211,6 @@ class wattsup (object):
 
 
 
-    def mode(self, runmode):
-        if args.sim:
-            return                      # can't set run mode while in simulation
-        self.s.write('#L,W,3,%s,,%d;' % (runmode, self.interval) )
-        if runmode == INTERNAL_MODE:
-            self.s.write('#O,W,1,%d' % FULLHANDLING)
-
-    def fetch(self):
-        if args.sim:
-            return                      # can't fetch while in simulation
-        for line in self.s:
-            if line.startswith( '#d' ):
-                fields = line.split(',')
-                W = float(fields[3]) / 10;
-                V = float(fields[4]) / 10;
-                A = float(fields[5]) / 1000;
-
-
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Get data from Watts Up power meter.')
@@ -345,29 +311,4 @@ json: JSON dict.')
             interval = int(args.interval)
 
         meter.setNetworkExtended(url, port, pfile, interval)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
