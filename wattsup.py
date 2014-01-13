@@ -19,14 +19,15 @@ import string
 
 USER_AGENT = 'WattsUp.NET'
 
-commands = {'header_request':   '#H,R,0;',
-            'version_request':  '#V,R,0;',
-            'network_info':     '#I,Q,0;',
-            'network_info_ext': '#I,E,0;',
-            'set_network_ext':  '#I,X,5,{},{},{},{},{};',
-            'write_network':    '#I,W,0;',
-            'logging':          '#L,W,3,E,,{};',
-            'reset':            '#V,W,0;'}
+commands = {'header_request':    '#H,R,0;',
+            'version_request':   '#V,R,0;',
+            'network_info':      '#I,Q,0;',
+            'network_info_ext':  '#I,E,0;',
+            'set_network_basic': '#I,S,6,{},{},{},{},{},{};',
+            'set_network_ext':   '#I,X,5,{},{},{},{},{};',
+            'write_network':     '#I,W,0;',
+            'logging':           '#L,W,3,E,,{};',
+            'reset':             '#V,W,0;'}
 
 verbose = False
 
@@ -128,6 +129,19 @@ class wattsup (object):
         ret += 'POST Interval: {} seconds\n'.format(n2[4])
         return ret
 
+    def enableDHCP (self):
+        self.setNetworkBasic('0.0.0.0', '0.0.0.0', '0.0.0.0', '0.0.0.0',
+            '255.255.255.0', True)
+
+    def setNetworkBasic (self, ip_addr, gateway, dns1, dns2, net_mask, dhcp):
+
+        cmd = commands['set_network_basic'].format(ip_addr, gateway, dns1, dns2,
+            net_mask, int(dhcp))
+        self.s.write(cmd)
+        self.s.readline()
+        self.s.write(commands['write_network'])
+        self.s.readline()
+
     def log (self, outfile=None, interval=1, format='raw'):
         """ Log data from the watts up """
         if outfile:
@@ -187,21 +201,6 @@ class wattsup (object):
         except KeyboardInterrupt:
             self.s.close()
 
-    def setNetworkExtended (self, url, port, pfile, interval=1):
-        if len(url) > 40:
-            print("POST URL too long. Must be 40 characters or less.")
-            sys.exit(1)
-        if len(pfile) > 40:
-            print("POST file too long. Must be 40 characters or less.")
-            sys.exit(1)
-
-        cmd = commands['set_network_ext'].format(url, port, pfile,
-            USER_AGENT, int(interval))
-        self.s.write(cmd)
-        self.s.readline()
-        self.s.write(commands['write_network'])
-        self.s.readline()
-
     def reset (self):
         """ Soft reset the watts up """
         if verbose:
@@ -252,6 +251,10 @@ json: JSON dict.')
                         nargs=3,
                         help='Configure POST settings. <POST URL> <POST port> \
 <POST file>')
+    parser.add_argument('--dhcp',
+                        dest='dhcp',
+                        action='store_true',
+                        help='Enable DHCP on the watts up')
     parser.add_argument('--reset',
                         dest='reset',
                         action='store_true',
@@ -311,4 +314,7 @@ json: JSON dict.')
             interval = int(args.interval)
 
         meter.setNetworkExtended(url, port, pfile, interval)
+
+    elif args.dhcp:
+        meter.enableDHCP()
 
