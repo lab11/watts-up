@@ -119,7 +119,7 @@ class wattsup (object):
         ret += 'DNS 1:         {}\n'.format(n1[2])
         ret += 'DNS 2:         {}\n'.format(n1[3])
         ret += 'Net Mask:      {}\n'.format(n1[4])
-        ret += 'DHCP:          {}\n'.format(bool(n1[5]))
+        ret += 'DHCP:          {}\n'.format(n1[5]=='1')
         ret += 'MAC Address:   {}\n'.format(mac)
         ret += 'POST Host:     {}\n'.format(n2[0])
         ret += 'POST Port:     {}\n'.format(n2[1])
