@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-
-from __future__ import print_function
+#!/usr/bin/env python3
 
 import sys
 try:
@@ -57,8 +55,8 @@ class wattsup (object):
 
         # Loop until the header info comes back
         while True:
-            self.s.write(commands['header_request'])
-            h = self.s.readline()
+            self.s.write(commands['header_request'].encode('ascii'))
+            h = self.s.readline().decode('ascii')
             if h[0:2] == "#h":
                 break
 
@@ -71,8 +69,8 @@ class wattsup (object):
             print('Retrieving identifying information')
 
         while True:
-            self.s.write(commands['version_request'])
-            i = self.s.readline()
+            self.s.write(commands['version_request'].encode('ascii'))
+            i = self.s.readline().decode('ascii')
             if i[0:2] == "#v":
                 ifields = i.split(';')[0].split(',')[3:]
                 if len(ifields) == 8:
@@ -97,22 +95,22 @@ class wattsup (object):
             print('Retrieving network information')
 
         while True:
-            self.s.write(commands['network_info'])
-            i = self.s.readline()
+            self.s.write(commands['network_info'].encode('ascii'))
+            i = self.s.readline().decode('ascii')
             if i[0:2] == "#i":
                 n1 = i.split(';')[0].split(',')[3:]
                 if len(n1) == 7:
                     break
 
         while True:
-            self.s.write(commands['network_info_ext'])
-            i = self.s.readline()
+            self.s.write(commands['network_info_ext'].encode('ascii'))
+            i = self.s.readline().decode('ascii')
             if i[0:2] == "#i":
                 n2 = i.split(';')[0].split(',')[3:]
                 if len(n2) == 5:
                     break
 
-        mac = ':'.join(s.encode('hex') for s in n1[6].decode('hex'))
+        mac = ':'.join(n1[6][i:i+2] for i in range(0,len(n1[6]),2))
         ret = ''
         ret += 'Watts Up? Meter Network Information:\n'
         ret += 'IP Address:    {}\n'.format(n1[0])
@@ -136,10 +134,10 @@ class wattsup (object):
     def setNetworkBasic (self, ip_addr, gateway, dns1, dns2, net_mask, dhcp):
 
         cmd = commands['set_network_basic'].format(ip_addr, gateway, dns1, dns2,
-            net_mask, int(dhcp))
+            net_mask, int(dhcp).encode('ascii'))
         self.s.write(cmd)
         self.s.readline()
-        self.s.write(commands['write_network'])
+        self.s.write(commands['write_network'].encode('ascii'))
         self.s.readline()
 
     def setNetworkExtended (self, url, port, pfile, interval=1):
@@ -151,10 +149,10 @@ class wattsup (object):
             sys.exit(1)
 
         cmd = commands['set_network_ext'].format(url, port, pfile,
-            USER_AGENT, int(interval))
+            USER_AGENT, int(interval)).encode('ascii')
         self.s.write(cmd)
         self.s.readline()
-        self.s.write(commands['write_network'])
+        self.s.write(commands['write_network'].encode('ascii'))
         self.s.readline()
 
     def log (self, outfile=None, interval=1, format='raw'):
@@ -170,11 +168,11 @@ class wattsup (object):
         else:
             f = stdoutfile()
 
-        self.s.write(commands['logging'].format(int(interval)))
+        self.s.write(commands['logging'].format(int(interval)).encode('ascii'))
 
         try:
             while True:
-                l = self.s.readline()
+                l = self.s.readline().decode('ascii')
                 if l[0:2] == '#d':
                     vals = l.split(';')[0].split(',')[3:]
 
@@ -221,7 +219,7 @@ class wattsup (object):
         if verbose:
             print("Resetting the Watts Up")
 
-        self.s.write(commands['reset'])
+        self.s.write(commands['reset'].encode('ascii'))
 
 
 
