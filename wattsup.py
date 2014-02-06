@@ -142,6 +142,21 @@ class wattsup (object):
         self.s.write(commands['write_network'])
         self.s.readline()
 
+    def setNetworkExtended (self, url, port, pfile, interval=1):
+        if len(url) > 40:
+            print("POST URL too long. Must be 40 characters or less.")
+            sys.exit(1)
+        if len(pfile) > 40:
+            print("POST file too long. Must be 40 characters or less.")
+            sys.exit(1)
+
+        cmd = commands['set_network_ext'].format(url, port, pfile,
+            USER_AGENT, int(interval))
+        self.s.write(cmd)
+        self.s.readline()
+        self.s.write(commands['write_network'])
+        self.s.readline()
+
     def log (self, outfile=None, interval=1, format='raw'):
         """ Log data from the watts up """
         if outfile:
