@@ -140,7 +140,7 @@ class wattsup (object):
         self.s.write(commands['write_network'].encode('ascii'))
         self.s.readline()
 
-    def setNetworkExtended (self, url, port, pfile, interval=1):
+    def setNetworkExtended (self, url, port, pfile, uagent, interval=1):
         if len(url) > 40:
             print("POST URL too long. Must be 40 characters or less.")
             sys.exit(1)
@@ -149,7 +149,7 @@ class wattsup (object):
             sys.exit(1)
 
         cmd = commands['set_network_ext'].format(url, port, pfile,
-            USER_AGENT, int(interval)).encode('ascii')
+            uagent, int(interval)).encode('ascii')
         self.s.write(cmd)
         self.s.readline()
         self.s.write(commands['write_network'].encode('ascii'))
@@ -264,6 +264,10 @@ json: JSON dict.')
                         nargs=3,
                         help='Configure POST settings. <POST URL> <POST port> \
 <POST file>')
+    parser.add_argument('-u', '--user-agent',
+                        dest='useragent',
+                        help='Set a custom User Agent. Only has effect if -n \
+is also used.')
     parser.add_argument('--dhcp',
                         dest='dhcp',
                         action='store_true',
@@ -321,12 +325,15 @@ json: JSON dict.')
         url = args.network[0][0]
         port = args.network[0][1]
         pfile = args.network[0][2]
+        uagent = USER_AGENT
+        if args.useragent:
+            uagent = args.useragent
 
         interval = 1
         if args.interval:
             interval = int(args.interval)
 
-        meter.setNetworkExtended(url, port, pfile, interval)
+        meter.setNetworkExtended(url, port, pfile, uagent, interval)
 
     elif args.dhcp:
         meter.enableDHCP()
