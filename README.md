@@ -21,6 +21,12 @@ Install the http://www.ftdichip.com/Drivers/VCP.htm drivers. Restart.
     python wattsup.py -p /dev/tty.usbserial-X -i
 
 
+### Configure POST
+
+    ./wattsup.py -p /dev/ttyX -n myserver.com 80 /wattsup/data
+
+
+
 Server
 ------
 
