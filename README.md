@@ -11,6 +11,7 @@ Usage
 
 ### Linux
 
+    pip install -r requirements.txt
     python wattsup.py -p /dev/ttyUSBX -i
     python wattsup.py --help
 
@@ -18,6 +19,7 @@ Usage
 
 Install the http://www.ftdichip.com/Drivers/VCP.htm drivers. Restart.
 
+    port install py-serial
     python wattsup.py -p /dev/tty.usbserial-X -i
 
 
