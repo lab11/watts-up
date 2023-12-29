@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
 
+import serial
+
 import sys
-try:
-    import serial
-except ImportError:
-    print('Need serial package.')
-    print('sudo port install py-serial')
-    sys.exit(1)
 import os
 import datetime, time
 import argparse
